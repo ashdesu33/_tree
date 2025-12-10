@@ -363,8 +363,8 @@ const spouseAttachments = useMemo(() => {
 
   const positions = new Map();
   const rowHeight = 200; // vertical spacing between generations
-  const colWidth = 300; // horizontal spacing within cluster
-  const clusterGap = 200; // gap between clusters
+  const colWidth = 200; // horizontal spacing within cluster
+  const clusterGap = 450; // gap between clusters
   const sortedGens = Array.from(genMap.keys()).sort((a, b) => a - b);
 
   sortedGens.forEach((g) => {
@@ -630,9 +630,38 @@ const edges = useMemo(() => {
     }
   };
 
+  const handleTouchStart = (e) => {
+  // don't start panning when tapping on a card
+  if (e.target.closest('.person-card')) return;
+
+  if (e.touches.length !== 1) return; // ignore multi-touch for now
+  const touch = e.touches[0];
+
+  setIsDragging(true);
+  setDragStart({
+    x: touch.clientX - position.x,
+    y: touch.clientY - position.y,
+  });
+};
+
+const handleTouchMove = (e) => {
+  if (!isDragging) return;
+  if (e.touches.length !== 1) return;
+
+  const touch = e.touches[0];
+  setPosition({
+    x: touch.clientX - dragStart.x,
+    y: touch.clientY - dragStart.y,
+  });
+};
+
+const handleTouchEnd = () => {
+  setIsDragging(false);
+};
+
   if (loading) {
     return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', backgroundColor: '#f9fafb' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', backgroundColor: '#000000ff' }}>
         <div style={{ fontSize: '1.125rem', color: '#4b5563' }}>Loading family tree…</div>
       </div>
     );
@@ -728,13 +757,18 @@ const edges = useMemo(() => {
           userSelect: 'none',
           WebkitUserSelect: 'none',
           MozUserSelect: 'none',
-          msUserSelect: 'none'
+          msUserSelect: 'none',
+          touchAction: 'none', 
         }}
         onWheel={handleWheel}
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={() => setIsDragging(false)}
         onMouseLeave={() => setIsDragging(false)}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        onTouchCancel={handleTouchEnd}
       >
         <div
           style={{
@@ -796,28 +830,19 @@ const edges = useMemo(() => {
             })}
           </svg>
 
-          {peopleWithFlags.map(p => {
-  // Only render main cards for non-spouse-only people
+          {peopleWithFlags.map((p) => {
+  // skip spouse-only nodes (they show collapsed under partners)
   if (p.isSpouseOnly) return null;
 
   const pos = activeLayout.positions.get(p.id);
   if (!pos) return null;
 
-const gender = (p.gender || '').toLowerCase();
-const isMale = gender === 'm' || gender === 'male';
-const isFemale = gender === 'f' || gender === 'female';
+  const genderNorm = (p.gender || "").toLowerCase();
+  const isMale = genderNorm === "m" || genderNorm === "male";
+  const isFemale = genderNorm === "f" || genderNorm === "female";
 
-            const bgColor = isMale
-              ? '#dcfce7'  // light green
-              : isFemale
-              ? '#fef4e2ff'  // light pinkish red
-              : '#f3f4f6'; // neutral grey
-
-            const borderColor = isMale
-              ? '#4ade80'  // green border
-              : isFemale
-              ? '#fda47eff'  // red/pink border
-              : '#9ca3af'; // neutral
+  const fillColor = "#ffffff";
+  const strokeColor = "#000"
 
   const attachedSpouses = spouseAttachments.get(p.id) || [];
 
@@ -826,117 +851,173 @@ const isFemale = gender === 'f' || gender === 'female';
       key={p.id}
       className="person-card"
       style={{
-        position: 'absolute',
+        position: "absolute",
         left: `${pos.x - canvasBounds.minX}px`,
         top: `${pos.y - canvasBounds.minY}px`,
-        width: '180px',
-        cursor: 'pointer',
+        width: "250px",
+        cursor: "pointer",
       }}
       onClick={(e) => handlePersonClick(p, e)}
       onMouseDown={(e) => e.stopPropagation()}
+      onTouchStart={(e) => e.stopPropagation()}
     >
-      {/* main person card */}
-      <div
-        style={{
-                    padding: '1rem',
-                    borderRadius: '0.5rem',
-                    boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
-                    border: '2px solid',
-                    backgroundColor: bgColor,
-                    borderColor: borderColor,
-                    transition: 'all 0.2s',
-                  }}
-        onMouseEnter={(e) =>
-          (e.currentTarget.style.boxShadow = '0 10px 15px rgba(0,0,0,0.2)')
-        }
-        onMouseLeave={(e) =>
-          (e.currentTarget.style.boxShadow = '0 4px 6px rgba(0,0,0,0.1)')
-        }
-      >
-        <div
+      <div style={{ position: "relative", width: 250, height: 120 }}>
+        {/* ================= SHAPE (SVG) ================= */}
+        <svg
+          width={250}
+          height={120}
+          viewBox="0 0 250 120"
           style={{
-            fontWeight: 'bold',
-            color: '#111827',
-            fontSize: '0.875rem',
-            marginBottom: '0.25rem',
+            display: "block",
           }}
         >
-          {p.name}
-        </div>
-        {p.title && (
-          <div
-            style={{
-              fontSize: '0.75rem',
-              color: '#6b7280',
-              fontStyle: 'italic',
-            }}
-          >
-            {p.title}
-          </div>
-        )}
-        <div
-          style={{
-            fontSize: '0.75rem',
-            color: '#4b5563',
-            marginTop: '0.25rem',
-          }}
-        >
-          {p.birthDate && <div>b. {p.birthDate}</div>}
-          {p.deathDate && <div>d. {p.deathDate}</div>}
-        </div>
+          {isMale && (
+            <polygon
+              points="125,4 250,116 0,116"
+              fill={fillColor}
+              stroke={strokeColor}
+              strokeWidth="3"
+            />
+          )}
 
-        {/* collapsed spouses under this person */}
-        {attachedSpouses.length > 0 && (
+          {isFemale && (
+            <ellipse
+              cx="125"
+              cy="60"
+              rx="120"
+              ry="60"
+              fill={fillColor}
+              stroke={strokeColor}
+              strokeWidth="2"
+            />
+          )}
+
+          {!isMale && !isFemale && (
+            <rect
+              x="8"
+              y="8"
+              width="164"
+              height="104"
+              rx="14"
+              ry="14"
+              fill={fillColor}
+              stroke={strokeColor}
+              strokeWidth="2"
+            />
+          )}
+        </svg>
+
+        {/* ================= CONTENT CENTERED ================= */}
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            display: "flex",
+            flexDirection: "column",
+            justifyContent: "center",
+            alignItems: "center",
+            padding: "0.75rem",
+            textAlign: "center",
+            pointerEvents: "none",
+          }}
+        >
+          {/* Name */}
           <div
             style={{
-              marginTop: '0.4rem',
-              paddingTop: '0.4rem',
-              borderTop: '1px dashed #d1d5db',
+              fontWeight: "600",
+              color: "#111827",
+              fontSize: "0.85rem",
+              marginBottom: 2,
+              wordBreak: "break-word",
+              background: "#fff",
             }}
           >
-            {attachedSpouses.map((sp) => (
-              <div
-                key={sp.id}
+            {p.name}
+          </div>
+
+          {/* Title */}
+          {p.title && (
+            <div
+              style={{
+                fontSize: "0.7rem",
+                color: "#6b7280",
+                fontStyle: "italic",
+                marginBottom: 3,
+                wordBreak: "break-word",
+              }}
+            >
+              {p.title}
+            </div>
+          )}
+
+          {/* Dates */}
+          {(p.birthDate || p.deathDate) && (
+            <div
+              style={{
+                fontSize: "0.7rem",
+                color: "#4b5563",
+                wordBreak: "break-word",
+              }}
+            >
+              {p.birthDate ? `b. ${p.birthDate}` : ""}
+              {p.birthDate && p.deathDate ? " · " : ""}
+              {p.deathDate ? `d. ${p.deathDate}` : ""}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* =============== COLLAPSED SPOUSES UNDER SHAPE =============== */}
+      {attachedSpouses.length > 0 && (
+        <div
+          style={{
+            marginTop: "0.25rem",
+            paddingTop: "0.25rem",
+            borderTop: "1px dashed #d1d5db",
+          }}
+        >
+          {attachedSpouses.map((sp) => (
+            <div
+              key={sp.id}
+              style={{
+                fontSize: "0.7rem",
+                color: "#4b5563",
+                marginTop: "0.1rem",
+                display: "flex",
+                gap: "0.1rem",
+                alignItems: "baseline",
+              }}
+            >
+              <span
                 style={{
-                  fontSize: '0.7rem',
-                  color: '#4b5563',
-                  marginTop: '0.2rem',
-                  display: 'flex',
-                  gap: '0.25rem',
-                  alignItems: 'baseline',
+                  fontWeight: 600,
+                  color: "#9ca3af",
+                  textTransform: "uppercase",
                 }}
               >
-                <span
-                  style={{
-                    fontWeight: 600,
-                    color: '#9ca3af',
-                    textTransform: 'uppercase',
-                  }}
-                >
-                  sp.
-                </span>
-                <button
-                  type="button"
-                  onClick={(e) => handlePersonClick(sp, e)}
-                  style={{
-                    border: 'none',
-                    background: 'none',
-                    padding: 0,
-                    margin: 0,
-                    cursor: 'pointer',
-                    color: '#1d4ed8',
-                  }}
-                >
-                  {sp.name}
-                </button>
-                {sp.birthDate && (
-                  <span style={{ opacity: 0.8 }}>b. {sp.birthDate}</span>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+                sp.
+              </span>
+              <button
+                type="button"
+                onClick={(e) => handlePersonClick(sp, e)}
+                style={{
+                  border: "none",
+                  background: "#fff",
+                  padding: 0,
+                  margin: 0,
+                  cursor: "pointer",
+                  color: "#1d4ed8",
+                }}
+              >
+                {sp.name}
+              </button>
+              {sp.birthDate && (
+                <span style={{ opacity: 0.8 }}>b. {sp.birthDate}</span>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 })}
