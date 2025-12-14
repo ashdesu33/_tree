@@ -1,214 +1,25 @@
-import React, { useEffect, useMemo, useState, useRef } from "react";
+// src/App.jsx
+import React, { useEffect, useMemo, useState } from "react";
 import Papa from "papaparse";
 
+import { exportToSVG } from "./utils/svgExport";
+import { exportSvgStringToPdf } from "./utils/pdfExport";
+
+import { parseGEDCOM, buildFamilyTree } from "./utils/gedcom";
+
+import Toolbar from "./components/Toolbar";
+import FamilyCanvas from "./components/FamilyCanvas";
+import PersonModal from "./components/PersonModal";
+
+import html2canvas from "html2canvas";
+import { jsPDF } from "jspdf";
+
+import "./App.css";
+
 const CSV_URL = "/family_tree.csv";
-
-function readGenderFromRow(row) {
-  if (!row) return '';
-
-  // Find any header that is basically "gender" ignoring case/whitespace
-  const genderKey = Object.keys(row).find(
-    (k) => k && k.toLowerCase().trim() === 'gender'
-  );
-
-  const raw =
-    (genderKey && row[genderKey]) ||
-    row.Gender ||
-    row.gender ||
-    row.Call || // last resort
-    '';
-
-  return raw.toString().trim().toLowerCase();
-}
-
-function parseGEDCOM(rows) {
-  // Just to see the global CSV structure once:
-  console.log("HEADERS:", Object.keys(rows[0] || {}));
-
-  const people = [];
-  const marriages = [];
-  const familyChildren = [];
-
-  let currentSection = null;
-
-  rows.forEach((row) => {
-    // In this CSV, the first column is always "Place"
-    const firstCol = row.Place || "";
-
-    // Section switches: these are literal values in the first column
-    if (firstCol === "Person") {
-      currentSection = "person";
-      return;
-    } else if (firstCol === "Marriage") {
-      currentSection = "marriage";
-      return;
-    } else if (firstCol === "Family") {
-      currentSection = "family";
-      return;
-    }
-
-      // --- PERSON ROWS ---
-  // ANY row with Place = [Ixxxx] is a person, regardless of currentSection
-  if (firstCol && firstCol.match(/\[I\d+\]/)) {
-    const id = firstCol;               // [I0000], [I0069], etc.
-    const surname = row.Title || "";   // Surname
-    const given = row.Name || "";      // Given
-    const fullName = [given, surname].filter(Boolean).join(" ").trim();
-
-    // Gender lives in the Date column in this weird export
-    const gender = (row.Date || "").trim().toLowerCase();
-
-    const extra = Array.isArray(row.__parsed_extra) ? row.__parsed_extra : [];
-    const birthDate = extra[0] || "";
-    const birthPlace = extra[1] || "";
-
-    const title = row.Enclosed_by || "";
-
-    if (id === "[I0000]") {
-      console.log("PARSED I0000:", {
-        id,
-        fullName,
-        gender,
-        birthDate,
-        birthPlace,
-        row,
-      });
-    }
-
-    people.push({
-      id,
-      surname,
-      given,
-      name: fullName || "Unknown",
-      gender,
-      birthDate,
-      birthPlace,
-      deathDate: "",
-      deathPlace: "",
-      title,
-      note: row.Note || "",
-    });
-
-    return;
-  }
-
-    // --- MARRIAGE SECTION ---
-    // In the Marriage block, Place will be [Fxxxx] for each family
-    if (currentSection === "marriage" && firstCol && firstCol.match(/\[F\d+\]/)) {
-      const id = firstCol;               // [F0001] etc.
-
-      // Based on typical GEDCOM CSV exports, these are good guesses:
-      const husband = row.Title || "";   // Husband ID ([Ixxxx]) or name
-      const wife = row.Name || "";       // Wife ID ([Ixxxx]) or name
-      const date = (row.Date || "").trim();
-      const extra = Array.isArray(row.__parsed_extra) ? row.__parsed_extra : [];
-      const place = extra[0] || "";      // Marriage place, if present
-
-      marriages.push({
-        id,
-        husband,
-        wife,
-        date,
-        place,
-      });
-
-      return;
-    }
-
-    // --- FAMILY SECTION ---
-    // In the Family block, Place will be [Fxxxx] again, and one of the columns holds child refs
-    if (currentSection === "family" && firstCol && firstCol.match(/\[F\d+\]/)) {
-      const familyId = firstCol;
-
-      // Child ID often ends up in Title or Name, depending on the export; you can tweak this
-      const childId =
-        row.Title && row.Title.match(/\[I\d+\]/)
-          ? row.Title
-          : row.Name && row.Name.match(/\[I\d+\]/)
-          ? row.Name
-          : row.Type && row.Type.match(/\[I\d+\]/)
-          ? row.Type
-          : "";
-
-      if (childId) {
-        familyChildren.push({
-          familyId,
-          childId,
-        });
-      }
-
-      return;
-    }
-  });
-
-  console.log("Parsed:", {
-    people: people.length,
-    marriages: marriages.length,
-    familyChildren: familyChildren.length,
-  });
-
-  return { people, marriages, familyChildren };
-}
-
-function buildFamilyTree(people, marriages, familyChildren) {
-  const peopleMap = new Map(people.map(p => [p.id, p]));
-  const families = new Map();
-  
-  marriages.forEach(marriage => {
-    families.set(marriage.id, {
-      id: marriage.id,
-      husband: marriage.husband,
-      wife: marriage.wife,
-      children: [],
-      date: marriage.date,
-      place: marriage.place,
-    });
-  });
-  
-  familyChildren.forEach(({ familyId, childId }) => {
-    if (families.has(familyId)) {
-      families.get(familyId).children.push(childId);
-    }
-  });
-  
-  const generations = new Map();
-  const processedPeople = new Set();
-  
-  function assignGeneration(personId, gen) {
-    if (processedPeople.has(personId)) return;
-    processedPeople.add(personId);
-    
-    const person = peopleMap.get(personId);
-    if (!person) return;
-    
-    person.generation = gen;
-    generations.set(personId, gen);
-    
-    familyChildren.forEach(({ familyId, childId }) => {
-      if (childId === personId) {
-        const family = families.get(familyId);
-        if (family) {
-          if (family.husband) assignGeneration(family.husband, gen - 1);
-          if (family.wife) assignGeneration(family.wife, gen - 1);
-        }
-      }
-    });
-    
-    families.forEach(family => {
-      if (family.husband === personId || family.wife === personId) {
-        family.children.forEach(childId => {
-          assignGeneration(childId, gen + 1);
-        });
-      }
-    });
-  }
-  
-  if (people.length > 0) {
-    assignGeneration(people[0].id, 0);
-  }
-  
-  return { people, families, peopleMap };
-}
+const NODE_WIDTH = 250;
+const NODE_HEIGHT = 120;
+const NODE_HALF = NODE_WIDTH / 2;
 
 function App() {
   const [rows, setRows] = useState([]);
@@ -216,13 +27,10 @@ function App() {
   const [error, setError] = useState("");
   const [selectedPerson, setSelectedPerson] = useState(null);
   const [focusedFamily, setFocusedFamily] = useState(null);
-  const [scale, setScale] = useState(0.8);
-  const [position, setPosition] = useState({ x: 0, y: 0 });
-  const [isDragging, setIsDragging] = useState(false);
-  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
-  const containerRef = useRef(null);
-  const [viewMode, setViewMode] = useState('full');
+  const [viewMode, setViewMode] = useState("full");
+  const [canvasResetKey, setCanvasResetKey] = useState(0);
 
+  // --- CSV load ------------------------------------------------------------
   useEffect(() => {
     Papa.parse(CSV_URL, {
       download: true,
@@ -240,388 +48,673 @@ function App() {
     });
   }, []);
 
+  // --- parse / build -------------------------------------------------------
   const { people, marriages, familyChildren } = useMemo(
-    () => rows.length ? parseGEDCOM(rows) : { people: [], marriages: [], familyChildren: [] },
+    () =>
+      rows.length
+        ? parseGEDCOM(rows)
+        : { people: [], marriages: [], familyChildren: [] },
     [rows]
   );
 
   const { people: enrichedPeople, families, peopleMap } = useMemo(
-    () => people.length ? buildFamilyTree(people, marriages, familyChildren) : { people: [], families: new Map(), peopleMap: new Map() },
+    () =>
+      people.length
+        ? buildFamilyTree(people, marriages, familyChildren)
+        : { people: [], families: new Map(), peopleMap: new Map() },
     [people, marriages, familyChildren]
   );
 
-    // Map each child -> list of family IDs they belong to
-  const childToFamilies = useMemo(() => {
-    const map = new Map();
-    familyChildren.forEach(({ familyId, childId }) => {
-      if (!childId) return;
-      if (!map.has(childId)) map.set(childId, []);
-      map.get(childId).push(familyId);
+  // child id set (for "isChild" flags)
+  const childIds = useMemo(() => {
+    const set = new Set();
+    familyChildren.forEach((fc) => {
+      if (fc.childId) set.add(fc.childId);
     });
-    return map;
+    return set;
   }, [familyChildren]);
 
-  // Set of all people who appear as children in some family
-const childIds = useMemo(() => {
-  const set = new Set();
-  familyChildren.forEach(fc => {
-    if (fc.childId) set.add(fc.childId);
-  });
-  return set;
-}, [familyChildren]);
+  // childId -> [familyId...]
+  const childToFamilies = useMemo(() => {
+    const m = new Map();
+    familyChildren.forEach(({ familyId, childId }) => {
+      if (!familyId || !childId) return;
+      if (!m.has(childId)) m.set(childId, []);
+      m.get(childId).push(familyId);
+    });
+    return m;
+  }, [familyChildren]);
 
-// People enriched with flags: isChild, isSpouseOnly
-const peopleWithFlags = useMemo(() => {
-  if (!enrichedPeople.length) return [];
 
-  const spouseSet = new Set();
-  families.forEach(f => {
-    if (f.husband) spouseSet.add(f.husband);
-    if (f.wife) spouseSet.add(f.wife);
-  });
 
-  return enrichedPeople.map(p => {
-    const isChild = childIds.has(p.id);
-    const isSpouse = spouseSet.has(p.id);
+  // flags for spouse-only attachment logic (your existing behavior)
+  const peopleWithFlags = useMemo(() => {
+    if (!enrichedPeople.length) return [];
 
-    const rawSpouseOnly = isSpouse && !isChild;
-    const isSpouseOnly = rawSpouseOnly && p.id !== "[I0000]"; 
-    return { ...p, isChild, isSpouseOnly };
-  });
-}, [enrichedPeople, childIds, families]);
-
-// Quick lookup by id
-const peopleById = useMemo(() => {
-  const m = new Map();
-  peopleWithFlags.forEach(p => m.set(p.id, p));
-  return m;
-}, [peopleWithFlags]);
-
-// Map: partnerId -> [spouseOnlyPerson, ...]
-const spouseAttachments = useMemo(() => {
-  const map = new Map();
-
-  if (!peopleWithFlags.length) return map;
-
-  // Helper: ensure array for key
-  const addSpouse = (partnerId, spousePerson) => {
-    if (!partnerId || !spousePerson) return;
-    if (!map.has(partnerId)) map.set(partnerId, []);
-    map.get(partnerId).push(spousePerson);
-  };
-
-  // For each spouse-only person, find the direct child they are attached to
-  peopleWithFlags.forEach(spouse => {
-    if (!spouse.isSpouseOnly) return;
-
-    const possiblePartners = [];
-
-    families.forEach(f => {
-      if (f.husband === spouse.id && f.wife) {
-        possiblePartners.push(f.wife);
-      } else if (f.wife === spouse.id && f.husband) {
-        possiblePartners.push(f.husband);
-      }
+    const spouseSet = new Set();
+    families.forEach((f) => {
+      if (f.husband) spouseSet.add(f.husband);
+      if (f.wife) spouseSet.add(f.wife);
     });
 
-    if (possiblePartners.length === 0) return;
+    return enrichedPeople.map((p) => {
+      const isChild = childIds.has(p.id);
+      const isSpouse = spouseSet.has(p.id);
 
-    // Prefer partner who is a direct child
-    let chosenPartnerId = null;
-    for (const pid of possiblePartners) {
-      const partner = peopleById.get(pid);
-      if (partner && partner.isChild) {
-        chosenPartnerId = pid;
-        break;
-      }
-    }
-    if (!chosenPartnerId) {
-      // fallback: first partner
-      chosenPartnerId = possiblePartners[0];
-    }
-
-    addSpouse(chosenPartnerId, spouse);
-  });
-
-  return map;
-}, [peopleWithFlags, families, peopleById]);
-
-  const fullTreeLayout = useMemo(() => {
-  if (viewMode !== "full" || enrichedPeople.length === 0) {
-    return { positions: new Map(), generations: [] };
-  }
-
-  console.log("Building layout for", enrichedPeople.length, "people");
-
-  // 1. group by generation
-  const genMap = new Map();
-  enrichedPeople.forEach((p) => {
-    const g = p.generation ?? 0;
-    if (!genMap.has(g)) genMap.set(g, []);
-    genMap.get(g).push(p);
-  });
-
-  const positions = new Map();
-  const rowHeight = 200; // vertical spacing between generations
-  const colWidth = 200; // horizontal spacing within cluster
-  const clusterGap = 450; // gap between clusters
-  const sortedGens = Array.from(genMap.keys()).sort((a, b) => a - b);
-
-  sortedGens.forEach((g) => {
-    const row = genMap.get(g);
-    const clusters = [];
-    const assigned = new Set();
-
-    row.forEach((p) => {
-      if (assigned.has(p.id)) return;
-
-      const famIds = childToFamilies.get(p.id) || [];
-
-      if (famIds.length === 0) {
-        // no family info → single-person cluster
-        clusters.push([p]);
-        assigned.add(p.id);
-      } else {
-        const famId = famIds[0];
-        const cluster = row.filter((q) => {
-          if (assigned.has(q.id)) return false;
-          const qFamIds = childToFamilies.get(q.id) || [];
-          return qFamIds.includes(famId);
-        });
-
-        cluster.forEach((q) => assigned.add(q.id));
-        cluster.sort((a, b) => a.name.localeCompare(b.name));
-        clusters.push(cluster);
-      }
+      const rawSpouseOnly = isSpouse && !isChild;
+      const isSpouseOnly = rawSpouseOnly && p.id !== "[I0000]";
+      return { ...p, isChild, isSpouseOnly };
     });
+  }, [enrichedPeople, childIds, families]);
 
-    clusters.sort((a, b) => {
-      const aName = a[0]?.name || "";
-      const bName = b[0]?.name || "";
-      return aName.localeCompare(bName);
-    });
+  const peopleById = useMemo(() => {
+    const m = new Map();
+    peopleWithFlags.forEach((p) => m.set(p.id, p));
+    return m;
+  }, [peopleWithFlags]);
 
-    const clusterWidths = clusters.map((c) => (c.length - 1) * colWidth);
-    const totalWidth =
-      clusterWidths.reduce((sum, w) => sum + w, 0) +
-      clusterGap * Math.max(0, clusters.length - 1);
+  const spouseAttachments = useMemo(() => {
+    const map = new Map();
+    if (!peopleWithFlags.length) return map;
 
-    let currentX = -totalWidth / 2;
+    const addSpouse = (partnerId, spousePerson) => {
+      if (!partnerId || !spousePerson) return;
+      if (!map.has(partnerId)) map.set(partnerId, []);
+      map.get(partnerId).push(spousePerson);
+    };
 
-    clusters.forEach((cluster, idx) => {
-      const clusterWidth = clusterWidths[idx];
+    peopleWithFlags.forEach((spouse) => {
+      if (!spouse.isSpouseOnly) return;
 
-      let x = currentX;
-      cluster.forEach((pInCluster) => {
-        positions.set(pInCluster.id, {
-          x,
-          y: g * rowHeight,
-        });
-        x += colWidth;
+      const possiblePartners = [];
+
+      families.forEach((f) => {
+        if (f.husband === spouse.id && f.wife) {
+          possiblePartners.push(f.wife);
+        } else if (f.wife === spouse.id && f.husband) {
+          possiblePartners.push(f.husband);
+        }
       });
 
-      currentX += clusterWidth + clusterGap;
+      if (possiblePartners.length === 0) return;
+
+      let chosenPartnerId = null;
+      for (const pid of possiblePartners) {
+        const partner = peopleById.get(pid);
+        if (partner && partner.isChild) {
+          chosenPartnerId = pid;
+          break;
+        }
+      }
+      if (!chosenPartnerId) chosenPartnerId = possiblePartners[0];
+
+      addSpouse(chosenPartnerId, spouse);
     });
-  });
 
-  console.log("Created", positions.size, "positions");
+    return map;
+  }, [peopleWithFlags, families, peopleById]);
 
-  return { positions, generations: sortedGens };
-}, [enrichedPeople, viewMode, childToFamilies]);
-
-// Family-only layout for "family" view
-const familyLayout = useMemo(() => {
-  if (!focusedFamily || viewMode !== "family") {
-    return { positions: new Map(), family: null };
+  // --- fullTreeLayout (fixed sibling grouping + avoids overwriting parents) -
+const fullTreeLayout = useMemo(() => {
+  if (viewMode !== "full" || enrichedPeople.length === 0) {
+    return { positions: new Map(), generations: [], edges: [] };
   }
 
-  const family = families.get(focusedFamily);
-  if (!family) return { positions: new Map(), family: null };
+  const ROW_HEIGHT = 260;
+
+  // layout spacing (tune these)
+  const SUBTREE_GAP = 70; // between branches (in "layout units", later scaled)
+  const SCALE_X =3 ; // base horizontal step (tight like Rao example)
+
+  const ROOT_ID = "[I0000]"; // your root person
 
   const positions = new Map();
-  let x = -100;
 
-  // parents top row
-  if (family.husband) {
-    positions.set(family.husband, { x, y: 0 });
-    x += 220;
-  }
-  if (family.wife) {
-    positions.set(family.wife, { x, y: 0 });
-  }
+  // --- compatibility output (your app expects this)
+  const generations = Array.from(
+    new Set(enrichedPeople.map((p) => p.generation ?? 0))
+  ).sort((a, b) => a - b);
 
-  // children centered underneath
-  const childCount = family.children.length;
-  const childWidth = childCount * 220;
-  let childX = -childWidth / 2 + 110;
-
-  family.children.forEach((childId) => {
-    positions.set(childId, { x: childX, y: 200 });
-    childX += 220;
-  });
-
-  return { positions, family };
-}, [focusedFamily, families, viewMode]);
-
-// active layout selector
-const activeLayout =
-  viewMode === "family" ? familyLayout : fullTreeLayout;
-
-// canvas bounds based on active layout
-const canvasBounds = useMemo(() => {
-  if (activeLayout.positions.size === 0) {
-    return { minX: 0, maxX: 1000, minY: 0, maxY: 1000 };
-  }
-
-  let minX = Infinity,
-    maxX = -Infinity,
-    minY = Infinity,
-    maxY = -Infinity;
-  activeLayout.positions.forEach(({ x, y }) => {
-    minX = Math.min(minX, x);
-    maxX = Math.max(maxX, x + 180);
-    minY = Math.min(minY, y);
-    maxY = Math.max(maxY, y + 80);
-  });
-
-  if (!isFinite(minX)) minX = 0;
-  if (!isFinite(maxX)) maxX = 1000;
-  if (!isFinite(minY)) minY = 0;
-  if (!isFinite(maxY)) maxY = 1000;
-
-  return {
-    minX: minX - 100,
-    maxX: maxX + 100,
-    minY: minY - 100,
-    maxY: maxY + 100,
+  // --- helper
+  const getCenterX = (id) => {
+    const p = positions.get(id);
+    return p ? p.x + NODE_HALF : null;
   };
-}, [activeLayout.positions]);
 
-// edges for full / family view
-const edges = useMemo(() => {
-  const result = [];
+  // Build quick lookup: child -> candidate parents (from families)
+  const childParents = new Map(); // childId -> [{pid, fid}...]
+  families.forEach((fam, fid) => {
+    (fam.children || []).forEach((cid) => {
+      if (!childParents.has(cid)) childParents.set(cid, []);
+      if (fam.husband) childParents.get(cid).push({ pid: fam.husband, fid });
+      if (fam.wife) childParents.get(cid).push({ pid: fam.wife, fid });
+    });
+  });
 
-  if (viewMode === "full") {
-    families.forEach((family) => {
-      const parentX = [];
-      const parentY = [];
+  // We only want the "direct tree": start at ROOT, follow parent->child links
+  // But to do that we must decide "which parent owns which child" when a child has 2 parents.
+  //
+  // Rule (matches what you said):
+  // - pick the parent that is itself reachable from ROOT (direct tree)
+  // - if both are reachable, pick deterministically (prefer the one who is a child in data; else stable id sort)
+  //
+  // We'll do this in two passes:
+  //   1) BFS from root using *any* parent->child where parent is already in tree.
+  //   2) As we add a child, we lock its chosen parent.
 
-      if (family.husband && fullTreeLayout.positions.has(family.husband)) {
-        const pos = fullTreeLayout.positions.get(family.husband);
-        parentX.push(pos.x + 90);
-        parentY.push(pos.y + 80);
+  // parent -> children candidate lists
+  const parentToChildren = new Map(); // pid -> Set(childId)
+  families.forEach((fam) => {
+    const parents = [fam.husband, fam.wife].filter(Boolean);
+    (fam.children || []).forEach((cid) => {
+      parents.forEach((pid) => {
+        if (!parentToChildren.has(pid)) parentToChildren.set(pid, new Set());
+        parentToChildren.get(pid).add(cid);
+      });
+    });
+  });
+
+  const chosenParentOf = new Map(); // childId -> parentId (single)
+  const inTree = new Set();         // ids reachable from ROOT (direct tree)
+  const queue = [];
+
+  inTree.add(ROOT_ID);
+  queue.push(ROOT_ID);
+
+  const isChildId = (pid) => {
+    const p = peopleMap.get(pid);
+    return p ? (p.isChild ?? false) : false;
+  };
+
+  const stablePick = (a, b) => String(a).localeCompare(String(b));
+
+  while (queue.length) {
+    const parentId = queue.shift();
+    const kids = parentToChildren.get(parentId);
+    if (!kids) continue;
+
+    kids.forEach((childId) => {
+      // if we already picked a parent for this child, only add child if this parent is the chosen one
+      if (chosenParentOf.has(childId)) {
+        if (chosenParentOf.get(childId) === parentId && !inTree.has(childId)) {
+          inTree.add(childId);
+          queue.push(childId);
+        }
+        return;
       }
-      if (family.wife && fullTreeLayout.positions.has(family.wife)) {
-        const pos = fullTreeLayout.positions.get(family.wife);
-        parentX.push(pos.x + 90);
-        parentY.push(pos.y + 80);
+
+      // choose parent among candidates that are already inTree (direct tree)
+      const candidates = (childParents.get(childId) || []).map((x) => x.pid);
+
+      const inTreeCandidates = candidates.filter((pid) => inTree.has(pid));
+      if (!inTreeCandidates.length) {
+        // if no candidate is already in-tree, we don't attach it yet
+        return;
       }
 
-      if (parentX.length > 0) {
-        const avgX = parentX.reduce((a, b) => a + b, 0) / parentX.length;
-        const maxY = Math.max(...parentY);
+      let pick = inTreeCandidates[0];
 
-        family.children.forEach((childId) => {
-          if (fullTreeLayout.positions.has(childId)) {
-            const childPos = fullTreeLayout.positions.get(childId);
-            result.push({
-              x1: avgX,
-              y1: maxY,
-              x2: childPos.x + 90,
-              y2: childPos.y,
-            });
-          }
-        });
+      // prefer candidate that is itself a "child" in your flags (stays on the main bloodline)
+      const childPref = inTreeCandidates.filter((pid) => isChildId(pid));
+      if (childPref.length) pick = childPref.sort(stablePick)[0];
+      else pick = inTreeCandidates.sort(stablePick)[0];
+
+      chosenParentOf.set(childId, pick);
+
+      if (pick === parentId && !inTree.has(childId)) {
+        inTree.add(childId);
+        queue.push(childId);
       }
     });
-  } else if (viewMode === "family" && familyLayout.family) {
+  }
+
+  // Build final tree adjacency: parent -> children (ONLY chosen parent)
+  const childrenOf = new Map(); // pid -> childIds[]
+  chosenParentOf.forEach((pid, cid) => {
+    if (!inTree.has(cid) || !inTree.has(pid)) return;
+    if (!childrenOf.has(pid)) childrenOf.set(pid, []);
+    childrenOf.get(pid).push(cid);
+  });
+
+  // Sort children stably (name, then id)
+  childrenOf.forEach((arr, pid) => {
+    arr.sort((a, b) => {
+      const an = peopleMap.get(a)?.name || "";
+      const bn = peopleMap.get(b)?.name || "";
+      const c = an.localeCompare(bn);
+      return c !== 0 ? c : String(a).localeCompare(String(b));
+    });
+  });
+
+  // ---------- tidy tree (Buchheim) on PERSON nodes only ----------
+  class TNode {
+    constructor(id) {
+      this.id = id;
+      this.children = [];
+      this.parent = null;
+
+      this.x = 0;
+      this.y = 0;
+
+      this.prelim = 0;
+      this.mod = 0;
+      this.ancestor = this;
+      this.thread = null;
+      this.change = 0;
+      this.shift = 0;
+      this.number = 1;
+      this._lmostSibling = null;
+    }
+  }
+
+  const nodes = new Map();
+  const N = (id) => {
+    if (!nodes.has(id)) nodes.set(id, new TNode(id));
+    return nodes.get(id);
+  };
+
+  // build node graph from ROOT over inTree set
+  inTree.forEach((id) => N(id));
+  inTree.forEach((pid) => {
+    const kids = childrenOf.get(pid) || [];
+    const pNode = N(pid);
+    kids.forEach((cid) => {
+      const cNode = N(cid);
+      if (cNode.parent) return;
+      cNode.parent = pNode;
+      pNode.children.push(cNode);
+    });
+  });
+
+  const root = N(ROOT_ID);
+
+  const leftSibling = (v) => {
+    if (!v.parent) return null;
+    const siblings = v.parent.children;
+    const i = siblings.indexOf(v);
+    return i > 0 ? siblings[i - 1] : null;
+  };
+
+  const leftmostSibling = (v) => {
+    if (!v.parent) return null;
+    if (v._lmostSibling) return v._lmostSibling;
+    const siblings = v.parent.children;
+    if (siblings.length && siblings[0] !== v) v._lmostSibling = siblings[0];
+    return v._lmostSibling;
+  };
+
+  const nextLeft = (v) => (v.children.length ? v.children[0] : v.thread);
+  const nextRight = (v) =>
+    (v.children.length ? v.children[v.children.length - 1] : v.thread);
+
+  const moveSubtree = (wl, wr, shift) => {
+    const subtrees = wr.number - wl.number;
+    wr.change -= shift / subtrees;
+    wr.shift += shift;
+    wl.change += shift / subtrees;
+    wr.prelim += shift;
+    wr.mod += shift;
+  };
+
+  const ancestor = (vil, v, defaultAncestor) => {
+    if (vil.ancestor.parent === v.parent) return vil.ancestor;
+    return defaultAncestor;
+  };
+
+  const executeShifts = (v) => {
+    let shift = 0;
+    let change = 0;
+    for (let i = v.children.length - 1; i >= 0; i--) {
+      const w = v.children[i];
+      w.prelim += shift;
+      w.mod += shift;
+      change += w.change;
+      shift += w.shift + change;
+    }
+  };
+
+  const apportion = (v, defaultAncestor) => {
+    const w = leftSibling(v);
+    if (!w) return defaultAncestor;
+
+    let vir = v;
+    let vor = v;
+    let vil = w;
+    let vol = leftmostSibling(v);
+
+    let sir = v.mod;
+    let sor = v.mod;
+    let sil = vil.mod;
+    let sol = vol.mod;
+
+    while (nextRight(vil) && nextLeft(vir)) {
+      vil = nextRight(vil);
+      vir = nextLeft(vir);
+      vol = nextLeft(vol);
+      vor = nextRight(vor);
+
+      vor.ancestor = v;
+
+      const shift = (vil.prelim + sil) - (vir.prelim + sir) + SUBTREE_GAP;
+      if (shift > 0) {
+        const a = ancestor(vil, v, defaultAncestor);
+        moveSubtree(a, v, shift);
+        sir += shift;
+        sor += shift;
+      }
+
+      sil += vil.mod;
+      sir += vir.mod;
+      sol += vol.mod;
+      sor += vor.mod;
+    }
+
+    if (nextRight(vil) && !nextRight(vor)) {
+      vor.thread = nextRight(vil);
+      vor.mod += sil - sor;
+    }
+    if (nextLeft(vir) && !nextLeft(vol)) {
+      vol.thread = nextLeft(vir);
+      vol.mod += sir - sol;
+      defaultAncestor = v;
+    }
+
+    return defaultAncestor;
+  };
+
+  const firstWalk = (v) => {
+    v.number = v.parent ? v.parent.children.indexOf(v) + 1 : 1;
+
+    if (v.children.length === 0) {
+      const ls = leftSibling(v);
+      v.prelim = ls ? ls.prelim + SUBTREE_GAP : 0;
+    } else {
+      let defaultAncestor = v.children[0];
+      v.children.forEach((w) => {
+        firstWalk(w);
+        defaultAncestor = apportion(w, defaultAncestor);
+      });
+
+      executeShifts(v);
+
+      const left = v.children[0];
+      const right = v.children[v.children.length - 1];
+      const mid = (left.prelim + right.prelim) / 2;
+
+      const ls = leftSibling(v);
+      if (ls) {
+        v.prelim = ls.prelim + SUBTREE_GAP;
+        v.mod = v.prelim - mid;
+      } else {
+        v.prelim = mid;
+      }
+    }
+  };
+
+  const secondWalk = (v, m = 0, depth = 0) => {
+    v.x = v.prelim + m;
+    v.y = depth;
+    v.children.forEach((w) => secondWalk(w, m + v.mod, depth + 1));
+  };
+
+  firstWalk(root);
+  secondWalk(root, 0, 0);
+
+  // convert tidy x/y to your absolute positions
+  // (scale x into pixel space, y into generation rows)
+  nodes.forEach((n) => {
+    const x = n.x * SCALE_X;
+    const y = n.y * ROW_HEIGHT;
+    positions.set(n.id, { x: x - NODE_HALF, y });
+  });
+
+  // global recenter once
+  {
+    const all = [...positions.values()];
+    if (all.length) {
+      let minX = Infinity, maxX = -Infinity;
+      all.forEach((p) => {
+        minX = Math.min(minX, p.x);
+        maxX = Math.max(maxX, p.x + NODE_WIDTH);
+      });
+      const mid = (minX + maxX) / 2;
+      positions.forEach((p, id) => {
+        positions.set(id, { x: p.x - mid, y: p.y });
+      });
+    }
+  }
+
+  // --------- EDGES: parent -> child ONLY, drawn LAST ----------
+  const edges = [];
+  childrenOf.forEach((kids, pid) => {
+    if (!positions.has(pid)) return;
+    const parentPos = positions.get(pid);
+    const trunkX = parentPos.x + NODE_HALF;
+
+    const y1 = parentPos.y + NODE_HEIGHT;
+    const jY = y1 + 40;
+
+    kids.forEach((cid) => {
+      const childPos = positions.get(cid);
+      if (!childPos) return;
+
+      edges.push({
+        x1: trunkX,
+        y1,
+        x2: childPos.x + NODE_HALF,
+        y2: childPos.y,
+        jY,
+      });
+    });
+  });
+
+  return { positions: new Map(positions), generations, edges };
+}, [viewMode, enrichedPeople, families, peopleMap, childToFamilies]);
+
+
+
+
+
+
+  // --- family view layout (unchanged) -------------------------------------
+  const familyLayout = useMemo(() => {
+    if (!focusedFamily || viewMode !== "family") {
+      return { positions: new Map(), family: null };
+    }
+
+    const family = families.get(focusedFamily);
+    if (!family) return { positions: new Map(), family: null };
+
+    const positions = new Map();
+    let x = -NODE_WIDTH;
+
+    if (family.husband) {
+      positions.set(family.husband, { x, y: 0 });
+      x += NODE_WIDTH + 40;
+    }
+    if (family.wife) {
+      positions.set(family.wife, { x, y: 0 });
+    }
+
+    const childCount = family.children.length;
+    const step = NODE_WIDTH + 40;
+    const childrenWidth =
+      childCount <= 1 ? NODE_WIDTH : (childCount - 1) * step + NODE_WIDTH;
+    let childX = -childrenWidth / 2;
+
+    family.children.forEach((childId) => {
+      positions.set(childId, { x: childX, y: 200 });
+      childX += step;
+    });
+
+    return { positions, family };
+  }, [focusedFamily, families, viewMode]);
+
+  const activeLayout = viewMode === "family" ? familyLayout : fullTreeLayout;
+
+  // --- canvas bounds -------------------------------------------------------
+  const canvasBounds = useMemo(() => {
+    if (activeLayout.positions.size === 0) {
+      return { minX: 0, maxX: 1000, minY: 0, maxY: 1000 };
+    }
+
+    let minX = Infinity,
+      maxX = -Infinity,
+      minY = Infinity,
+      maxY = -Infinity;
+
+    activeLayout.positions.forEach(({ x, y }) => {
+      minX = Math.min(minX, x);
+      maxX = Math.max(maxX, x + NODE_WIDTH);
+      minY = Math.min(minY, y);
+      maxY = Math.max(maxY, y + NODE_HEIGHT);
+    });
+
+    if (!isFinite(minX)) minX = 0;
+    if (!isFinite(maxX)) maxX = 1000;
+    if (!isFinite(minY)) minY = 0;
+    if (!isFinite(maxY)) maxY = 1000;
+
+    return {
+      minX: minX - 120,
+      maxX: maxX + 120,
+      minY: minY - 120,
+      maxY: maxY + 120,
+    };
+  }, [activeLayout.positions]);
+
+
+const edges = useMemo(() => {
+  if (viewMode === "full") return fullTreeLayout.edges || [];
+
+  // family view edges unchanged...
+  const result = [];
+  if (viewMode === "family" && familyLayout.family) {
     const family = familyLayout.family;
-    const parentX = [];
+    const parentCenters = [];
 
     if (family.husband && familyLayout.positions.has(family.husband)) {
       const pos = familyLayout.positions.get(family.husband);
-      parentX.push(pos.x + 90);
+      parentCenters.push(pos.x + NODE_HALF);
     }
     if (family.wife && familyLayout.positions.has(family.wife)) {
       const pos = familyLayout.positions.get(family.wife);
-      parentX.push(pos.x + 90);
+      parentCenters.push(pos.x + NODE_HALF);
     }
 
-    if (parentX.length > 0) {
-      const avgX = parentX.reduce((a, b) => a + b, 0) / parentX.length;
+    if (parentCenters.length > 0) {
+      const junctionX = parentCenters.reduce((a, b) => a + b, 0) / parentCenters.length;
+      const parentBottomY = NODE_HEIGHT;
+      const junctionY = parentBottomY + 40;
 
       family.children.forEach((childId) => {
-        if (familyLayout.positions.has(childId)) {
-          const childPos = familyLayout.positions.get(childId);
-          result.push({
-            x1: avgX,
-            y1: 80,
-            x2: childPos.x + 90,
-            y2: childPos.y,
-          });
-        }
+        if (!familyLayout.positions.has(childId)) return;
+        const childPos = familyLayout.positions.get(childId);
+        result.push({
+          x1: junctionX,
+          y1: parentBottomY,
+          x2: childPos.x + NODE_HALF,
+          y2: childPos.y,
+          jY: junctionY,
+        });
       });
     }
   }
-
-  
-
   return result;
-}, [families, fullTreeLayout, familyLayout, viewMode]);
+}, [viewMode, fullTreeLayout, familyLayout]);
 
-  // useEffect(() => {
-  //   if (enrichedPeople.length > 0 && containerRef.current && viewMode === 'full' && fullTreeLayout.positions.size > 0) {
-  //     const firstPerson = enrichedPeople[0];
-  //     if (firstPerson && fullTreeLayout.positions.has(firstPerson.id)) {
-  //       const pos = fullTreeLayout.positions.get(firstPerson.id);
-  //       const containerWidth = containerRef.current.clientWidth;
-  //       const containerHeight = containerRef.current.clientHeight;
-        
-  //       // Only set position once on initial load
-  //       setPosition({
-  //         x: containerWidth / 2 - (pos.x * 0.8),
-  //         y: containerHeight / 4 - (pos.y * 0.8)
-  //       });
-  //     }
-  //   }
-  // }, [enrichedPeople.length, fullTreeLayout.positions.size, viewMode]);
 
-  const handleWheel = (e) => {
-    e.stopPropagation();
-    const delta = e.deltaY * -0.0005; // Reduced sensitivity
-    const newScale = Math.min(Math.max(0.3, scale + delta), 3);
-    
-    // Only update if scale actually changed
-    if (newScale !== scale) {
-      setScale(newScale);
+  // --- handlers ------------------------------------------------------------
+  const handleExportSVG = () => {
+    const svgContent = exportToSVG(
+      canvasBounds,
+      edges,
+      peopleWithFlags,
+      activeLayout,
+      spouseAttachments
+    );
+    const blob = new Blob([svgContent], { type: "image/svg+xml" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `family-tree-${viewMode}-${Date.now()}.svg`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+
+  async function fetchFontAsBase64(url) {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error("Failed to fetch font: " + url);
+  const buf = await res.arrayBuffer();
+  const bytes = new Uint8Array(buf);
+  let binary = "";
+  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+  return btoa(binary);
+}
+
+  const handleExportPDF = async () => {
+  // your font is in /public/authentic-sans-condensed-90.otf
+  const fontUrl = "/authentic-sans-condensed-90.otf";
+  const b64 = await fetchFontAsBase64(fontUrl);
+
+  const fontFaceCss = `
+@font-face {
+  font-family: "authentic";
+  src: url(data:font/otf;base64,${b64}) format("opentype");
+  font-weight: normal;
+  font-style: normal;
+}
+`;
+
+  const svgContent = exportToSVG(
+    canvasBounds,
+    edges,
+    peopleWithFlags,
+    activeLayout,
+    spouseAttachments,
+    {
+      paper: "letter",
+      orientation: "landscape",
+      dpi: 300,
+      marginIn: 0.5,
+      paged: true,
+      bg: "#f9fafb",
+      fontFaceCss, // ✅ embed font into SVG
     }
+  );
+
+  await exportSvgStringToPdf(
+    svgContent,
+    `family-tree-${viewMode}-${Date.now()}.pdf`,
+    { paper: "letter", orientation: "landscape" }
+  );
+};
+
+  const handleResetView = () => setCanvasResetKey((k) => k + 1);
+
+  const handleBackToFull = () => {
+    setViewMode("full");
+    setFocusedFamily(null);
+    setSelectedPerson(null);
+    handleResetView();
   };
 
-  const handleMouseDown = (e) => {
-    if (e.target.closest('.person-card')) return;
-    setIsDragging(true);
-    setDragStart({ x: e.clientX - position.x, y: e.clientY - position.y });
-  };
-
-  const handleMouseMove = (e) => {
-    if (!isDragging) return;
-    setPosition({ x: e.clientX - dragStart.x, y: e.clientY - dragStart.y });
-  };
-
-  const handlePersonClick = (person, e) => {
-    e.stopPropagation();
-    
-    if (viewMode === 'full') {
+  const handlePersonClick = (person) => {
+    if (viewMode === "full") {
       let familyId = null;
       families.forEach((family, id) => {
         if (family.husband === person.id || family.wife === person.id) {
           familyId = id;
         }
       });
-      
+
       if (familyId) {
         setFocusedFamily(familyId);
-        setViewMode('family');
+        setViewMode("family");
+        handleResetView();
       } else {
         setSelectedPerson(person);
       }
@@ -630,463 +723,54 @@ const edges = useMemo(() => {
     }
   };
 
-  const handleTouchStart = (e) => {
-  // don't start panning when tapping on a card
-  if (e.target.closest('.person-card')) return;
-
-  if (e.touches.length !== 1) return; // ignore multi-touch for now
-  const touch = e.touches[0];
-
-  setIsDragging(true);
-  setDragStart({
-    x: touch.clientX - position.x,
-    y: touch.clientY - position.y,
-  });
-};
-
-const handleTouchMove = (e) => {
-  if (!isDragging) return;
-  if (e.touches.length !== 1) return;
-
-  const touch = e.touches[0];
-  setPosition({
-    x: touch.clientX - dragStart.x,
-    y: touch.clientY - dragStart.y,
-  });
-};
-
-const handleTouchEnd = () => {
-  setIsDragging(false);
-};
-
+  // --- loading / error states ---------------------------------------------
   if (loading) {
     return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', backgroundColor: '#000000ff' }}>
-        <div style={{ fontSize: '1.125rem', color: '#4b5563' }}>Loading family tree…</div>
+      <div className="screen-center screen-dark">
+        <div className="screen-message">Loading family tree…</div>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', backgroundColor: '#f9fafb' }}>
-        <div style={{ fontSize: '1.125rem', color: '#dc2626' }}>{error}</div>
+      <div className="screen-center screen-light">
+        <div className="screen-message screen-message--error">{error}</div>
       </div>
     );
   }
 
   if (enrichedPeople.length === 0) {
     return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', backgroundColor: '#f9fafb' }}>
-        <div style={{ fontSize: '1.125rem', color: '#4b5563' }}>No people found in CSV</div>
+      <div className="screen-center screen-light">
+        <div className="screen-message">No people found in CSV</div>
       </div>
     );
   }
 
-  const canvasWidth = canvasBounds.maxX - canvasBounds.minX;
-  const canvasHeight = canvasBounds.maxY - canvasBounds.minY;
-
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', width: '100vw', margin: 0, padding: 0, overflow: 'hidden' }}>
-      <div style={{ 
-        display: 'flex', 
-        alignItems: 'center', 
-        justifyContent: 'space-between', 
-        padding: '1rem 1.5rem',
-        backgroundColor: 'white',
-        borderBottom: '1px solid #e5e7eb',
-        boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
-        zIndex: 20
-      }}>
-        <div>
-          <span style={{ fontSize: '1.25rem', fontWeight: 'bold', color: '#1f2937' }}>
-            {viewMode === 'full' ? 'Full UAK Family Tree' : 'Family View'}
-          </span>
-          <span style={{ marginLeft: '0.75rem', fontSize: '0.875rem', color: '#6b7280' }}>
-            {enrichedPeople.length} people
-          </span>
-        </div>
-        <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
-          {viewMode === 'family' && (
-            <button 
-              onClick={() => { setViewMode('full'); setFocusedFamily(null); }}
-              style={{
-                padding: '0.375rem 0.75rem',
-                backgroundColor: '#6b7280',
-                color: 'white',
-                fontSize: '0.875rem',
-                borderRadius: '0.375rem',
-                border: 'none',
-                cursor: 'pointer'
-              }}
-            >
-              ← Back to Full Tree
-            </button>
-          )}
-          <div style={{ fontSize: '0.875rem', color: '#4b5563' }}>
-            {viewMode === 'full' ? 'Click person to view family' : 'Click person for details'}
-          </div>
-          <button 
-            onClick={() => { 
-              setScale(0.8); 
-              setPosition({ x: 0, y: 0 });
-            }}
-            style={{
-              padding: '0.375rem 0.75rem',
-              backgroundColor: '#3b82f6',
-              color: 'white',
-              fontSize: '0.875rem',
-              borderRadius: '0.375rem',
-              border: 'none',
-              cursor: 'pointer'
-            }}
-          >
-            Reset View
-          </button>
-        </div>
-      </div>
+    <div className="app-root">
+      <Toolbar
+        viewMode={viewMode}
+        peopleCount={enrichedPeople.length}
+        onBackToFull={handleBackToFull}
+        onExportPDF={handleExportPDF} 
+        onResetView={handleResetView}
+      />
 
-      <div 
-        ref={containerRef}
-        style={{ 
-          flex: 1,
-          position: 'relative',
-          overflow: 'hidden',
-          backgroundColor: '#f9fafb',
-          cursor: isDragging ? 'grabbing' : 'grab',
-          userSelect: 'none',
-          WebkitUserSelect: 'none',
-          MozUserSelect: 'none',
-          msUserSelect: 'none',
-          touchAction: 'none', 
-        }}
-        onWheel={handleWheel}
-        onMouseDown={handleMouseDown}
-        onMouseMove={handleMouseMove}
-        onMouseUp={() => setIsDragging(false)}
-        onMouseLeave={() => setIsDragging(false)}
-        onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
-        onTouchEnd={handleTouchEnd}
-        onTouchCancel={handleTouchEnd}
-      >
-        <div
-          style={{
-            position: 'absolute',
-            left: '50%',
-            top: '50%',
-            transform: `translate(calc(-50% + ${position.x}px), calc(-50% + ${position.y}px)) scale(${scale})`,
-            transformOrigin: 'center center',
-            width: `${canvasWidth}px`,
-            height: `${canvasHeight}px`,
-          }}
-        >
-          <svg 
-            style={{ 
-              position: 'absolute', 
-              top: 0, 
-              left: 0, 
-              width: '100%', 
-              height: '100%',
-              pointerEvents: 'none',
-              overflow: 'visible'
-            }}
-            viewBox={`0 0 ${canvasWidth} ${canvasHeight}`}
-          >
-            <defs>
-              <marker
-                id="arrowhead"
-                markerWidth="8"
-                markerHeight="8"
-                refX="7"
-                refY="4"
-                orient="auto"
-              >
-                <polygon points="0 0, 8 4, 0 8" fill="#64748b" />
-              </marker>
-            </defs>
-            {edges.map((edge, idx) => {
-              const x1 = edge.x1 - canvasBounds.minX;
-              const y1 = edge.y1 - canvasBounds.minY;
-              const x2 = edge.x2 - canvasBounds.minX;
-              const y2 = edge.y2 - canvasBounds.minY;
-              
-              if (y2 <= y1) return null;
-              
-              const midY = (y1 + y2) / 2;
-              const path = `M ${x1},${y1} C ${x1},${midY} ${x2},${midY} ${x2},${y2}`;
-              
-              return (
-                <path
-                  key={idx}
-                  d={path}
-                  stroke="#94a3b8"
-                  strokeWidth="2"
-                  fill="none"
-                  markerEnd="url(#arrowhead)"
-                  opacity="0.6"
-                />
-              );
-            })}
-          </svg>
+      <FamilyCanvas
+        key={canvasResetKey}
+        activeLayout={activeLayout}
+        canvasBounds={canvasBounds}
+        edges={edges}
+        peopleWithFlags={peopleWithFlags}
+        spouseAttachments={spouseAttachments}
+        onPersonClick={handlePersonClick}
+      />
 
-          {peopleWithFlags.map((p) => {
-  // skip spouse-only nodes (they show collapsed under partners)
-  if (p.isSpouseOnly) return null;
-
-  const pos = activeLayout.positions.get(p.id);
-  if (!pos) return null;
-
-  const genderNorm = (p.gender || "").toLowerCase();
-  const isMale = genderNorm === "m" || genderNorm === "male";
-  const isFemale = genderNorm === "f" || genderNorm === "female";
-
-  const fillColor = "#ffffff";
-  const strokeColor = "#000"
-
-  const attachedSpouses = spouseAttachments.get(p.id) || [];
-
-  return (
-    <div
-      key={p.id}
-      className="person-card"
-      style={{
-        position: "absolute",
-        left: `${pos.x - canvasBounds.minX}px`,
-        top: `${pos.y - canvasBounds.minY}px`,
-        width: "250px",
-        cursor: "pointer",
-      }}
-      onClick={(e) => handlePersonClick(p, e)}
-      onMouseDown={(e) => e.stopPropagation()}
-      onTouchStart={(e) => e.stopPropagation()}
-    >
-      <div style={{ position: "relative", width: 250, height: 120 }}>
-        {/* ================= SHAPE (SVG) ================= */}
-        <svg
-          width={250}
-          height={120}
-          viewBox="0 0 250 120"
-          style={{
-            display: "block",
-          }}
-        >
-          {isMale && (
-            <polygon
-              points="125,4 250,116 0,116"
-              fill={fillColor}
-              stroke={strokeColor}
-              strokeWidth="3"
-            />
-          )}
-
-          {isFemale && (
-            <ellipse
-              cx="125"
-              cy="60"
-              rx="120"
-              ry="60"
-              fill={fillColor}
-              stroke={strokeColor}
-              strokeWidth="2"
-            />
-          )}
-
-          {!isMale && !isFemale && (
-            <rect
-              x="8"
-              y="8"
-              width="164"
-              height="104"
-              rx="14"
-              ry="14"
-              fill={fillColor}
-              stroke={strokeColor}
-              strokeWidth="2"
-            />
-          )}
-        </svg>
-
-        {/* ================= CONTENT CENTERED ================= */}
-        <div
-          style={{
-            position: "absolute",
-            inset: 0,
-            display: "flex",
-            flexDirection: "column",
-            justifyContent: "center",
-            alignItems: "center",
-            padding: "0.75rem",
-            textAlign: "center",
-            pointerEvents: "none",
-          }}
-        >
-          {/* Name */}
-          <div
-            style={{
-              fontWeight: "600",
-              color: "#111827",
-              fontSize: "0.85rem",
-              marginBottom: 2,
-              wordBreak: "break-word",
-              background: "#fff",
-            }}
-          >
-            {p.name}
-          </div>
-
-          {/* Title */}
-          {p.title && (
-            <div
-              style={{
-                fontSize: "0.7rem",
-                color: "#6b7280",
-                fontStyle: "italic",
-                marginBottom: 3,
-                wordBreak: "break-word",
-              }}
-            >
-              {p.title}
-            </div>
-          )}
-
-          {/* Dates */}
-          {(p.birthDate || p.deathDate) && (
-            <div
-              style={{
-                fontSize: "0.7rem",
-                color: "#4b5563",
-                wordBreak: "break-word",
-              }}
-            >
-              {p.birthDate ? `b. ${p.birthDate}` : ""}
-              {p.birthDate && p.deathDate ? " · " : ""}
-              {p.deathDate ? `d. ${p.deathDate}` : ""}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* =============== COLLAPSED SPOUSES UNDER SHAPE =============== */}
-      {attachedSpouses.length > 0 && (
-        <div
-          style={{
-            marginTop: "0.25rem",
-            paddingTop: "0.25rem",
-            borderTop: "1px dashed #d1d5db",
-          }}
-        >
-          {attachedSpouses.map((sp) => (
-            <div
-              key={sp.id}
-              style={{
-                fontSize: "0.7rem",
-                color: "#4b5563",
-                marginTop: "0.1rem",
-                display: "flex",
-                gap: "0.1rem",
-                alignItems: "baseline",
-              }}
-            >
-              <span
-                style={{
-                  fontWeight: 600,
-                  color: "#9ca3af",
-                  textTransform: "uppercase",
-                }}
-              >
-                sp.
-              </span>
-              <button
-                type="button"
-                onClick={(e) => handlePersonClick(sp, e)}
-                style={{
-                  border: "none",
-                  background: "#fff",
-                  padding: 0,
-                  margin: 0,
-                  cursor: "pointer",
-                  color: "#1d4ed8",
-                }}
-              >
-                {sp.name}
-              </button>
-              {sp.birthDate && (
-                <span style={{ opacity: 0.8 }}>b. {sp.birthDate}</span>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
+      <PersonModal person={selectedPerson} onClose={() => setSelectedPerson(null)} />
     </div>
   );
-})}
-        </div>
-      </div>
-
-      {selectedPerson && (
-        <div 
-          style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: 'rgba(0,0,0,0.5)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 30
-          }}
-          onClick={() => setSelectedPerson(null)}
-        >
-          <div 
-            style={{
-              backgroundColor: 'white',
-              borderRadius: '0.5rem',
-              boxShadow: '0 20px 25px rgba(0,0,0,0.15)',
-              padding: '1.5rem',
-              maxWidth: '28rem',
-              width: '100%',
-              margin: '0 1rem'
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' }}>
-              <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#111827', margin: 0 }}>
-                {selectedPerson.name}
-              </h2>
-              <button 
-                onClick={() => setSelectedPerson(null)}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  color: '#9ca3af',
-                  fontSize: '2rem',
-                  cursor: 'pointer',
-                  lineHeight: 1,
-                  padding: 0
-                }}
-              >
-                ×
-              </button>
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', color: '#374151' }}>
-              <div><span style={{ fontWeight: 600 }}>ID:</span> {selectedPerson.id}</div>
-              {selectedPerson.gender && <div><span style={{ fontWeight: 600 }}>Gender:</span> {selectedPerson.gender}</div>}
-              {selectedPerson.title && <div><span style={{ fontWeight: 600 }}>Title:</span> {selectedPerson.title}</div>}
-              {selectedPerson.birthDate && <div><span style={{ fontWeight: 600 }}>Birth:</span> {selectedPerson.birthDate}</div>}
-              {selectedPerson.birthPlace && <div><span style={{ fontWeight: 600 }}>Birth Place:</span> {selectedPerson.birthPlace}</div>}
-              {selectedPerson.deathDate && <div><span style={{ fontWeight: 600 }}>Death:</span> {selectedPerson.deathDate}</div>}
-              {selectedPerson.deathPlace && <div><span style={{ fontWeight: 600 }}>Death Place:</span> {selectedPerson.deathPlace}</div>}
-              {selectedPerson.note && <div><span style={{ fontWeight: 600 }}>Note:</span> {selectedPerson.note}</div>}
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-
 }
 
 export default App;
