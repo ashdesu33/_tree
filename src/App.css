@@ -3,6 +3,17 @@
   src: url(/public/authentic-sans-condensed-90.otf);
   font-weight: normal;
 }
+@font-face {
+  font-family: "authentic regular";
+  src: url(/public/authentic-sans-90.otf);
+  font-weight: normal;
+}
+@font-face {
+  font-family: "authentic regular";
+  src: url(/public/authentic-sans-130.otf);
+  font-weight: bold;
+}
+
 
 .app-root {
   display: flex;
@@ -12,8 +23,13 @@
   margin: 0;
   padding: 0;
   overflow: hidden;
-  color:#341117;
+  color: #471a22;
   font-family: "authentic";
+}
+
+
+#graph{
+  background-color: #e6d8d8;
 }
 
 /* Top bar */
@@ -23,7 +39,8 @@
   align-items: center;
   justify-content: space-between;
   padding: 1rem 1.5rem;
-  background-color: #ffffff;
+  background-color: #e6d8d8;
+  border-top: 1px solid #341117;
   border-bottom: 1px solid #341117;
   z-index: 20;
 }
@@ -144,6 +161,8 @@
   -ms-user-select: none;
   touch-action: none;
   cursor: grab;
+  padding: 5% 0;
+  
 }
 
 .tree-container--dragging {
@@ -169,7 +188,7 @@
   overflow: visible;
 }
 
-/* Person cards */
+/* Person cards - Regular */
 
 .person-card {
   position: absolute;
@@ -201,7 +220,7 @@
 
 .person-name {
   font-weight: 600;
-  color: #000000;
+  color: #ffffff;
   background-color: #ffffff;
   font-size: 1.5rem;
   padding:0 0.5rem 0 0.5rem;
@@ -222,6 +241,17 @@
   color: #ffffff;
   mix-blend-mode: difference;
   word-break: break-word;
+}
+
+/* Compact person cards */
+
+.compact-person-card {
+  transition: transform 0.1s ease;
+}
+
+.compact-person-card:hover {
+  transform: scale(1.05);
+  z-index: 10;
 }
 
 /* Spouse list under person */

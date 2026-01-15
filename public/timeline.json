@@ -1,0 +1,51 @@
+[
+  {
+    "year": 1948,
+    "title": "Nakba",
+    "description": "The family was forcibly expelled from Tel Arad/Naqab after the establishment of Israel; return became institutionally impossible as the area was reclassified under state/military control and later preserved as an \"archaeological site/national park,\" erasing modern Bedouin presence.",
+    "images": [
+      {
+        "src": "/timeline/1948_map.jpg",
+        "alt": "Aerial view of Tel Arad/Naqab"
+      }
+    ]
+  },
+  {
+    "year": 1962,
+    "title": "Establishment of Arad",
+    "description": "Israel established the Jewish-majority \"development town\" Arad near Tel Arad, on lands from which Bedouin communities had been expelled; the area was later normalized as a tourism hub for the Dead Sea.",
+    "images": [
+      {
+        "src": "/timeline/1962_1.jpg",
+        "alt": "Aerial view of an archaeological site near Arad"
+      },
+      {
+        "src": "/timeline/1962_2.jpg",
+        "alt": "Another aerial view of a settlement in a desert environment"
+      }
+    ]
+  },
+  {
+    "year": 1967,
+    "title": "Hathaleens Migration",
+    "description": "The Hathaleens migrated north seeking water and pasture, maintaining a pastoral life (tents, herding) and entering the Hebron hills (then under Jordanian rule), where informal grazing, dwelling-building, and land transactions were not prosecuted in the same way.",
+    "images": []
+  },
+  {
+    "year": 1971,
+    "title": "Event Title",
+    "description": "Placeholder description for 1971 event. This is a longer description that can span multiple paragraphs and provide detailed context about the historical event.",
+    "images": [
+      {
+        "src": "/timeline/1971.jpg",
+        "alt": "Description of 1971 image"
+      }
+    ]
+  },
+  {
+    "year": 1976,
+    "title": "Event Title",
+    "description": "Placeholder description for 1976 event. This demonstrates how multiple events can occur in the same year.",
+    "images": []
+  }
+]

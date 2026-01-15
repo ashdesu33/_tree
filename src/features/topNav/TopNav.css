@@ -1,0 +1,59 @@
+.top-nav {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 64px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  background: rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+
+  z-index: 1000;
+}
+
+.top-nav-list {
+  list-style: none;
+  display: flex;
+  width: 80%;
+  justify-content: space-between;
+  margin: 0;
+}
+
+.top-nav a {
+  font-family: "authentic", sans-serif;
+  font-size: 2rem;
+  font-weight: bold;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+
+  color: #341117;
+  text-decoration: none;
+
+  opacity: 0.7;
+  transition: opacity 0.2s ease;
+}
+
+.top-nav a:hover {
+  opacity: 1;
+}
+
+/* Optional: active state hook */
+.top-nav a.active {
+  opacity: 1;
+}
+
+
+
+@media (max-width: 767px) {
+    .top-nav{
+        height: 32px;
+    }
+    .top-nav a{
+        font-size: 1rem;
+    }
+}

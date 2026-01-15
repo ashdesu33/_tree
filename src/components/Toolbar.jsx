@@ -2,10 +2,10 @@ import React from "react";
 
 function Toolbar({
   viewMode,
+  displayMode,
   peopleCount,
   onBackToFull,
-  onExportPDF, 
-  onResetView,
+  onExportPDF,
 }) {
   const hintText =
     viewMode === "full"
@@ -36,10 +36,6 @@ function Toolbar({
           title="Export PDF"
         >
           Export PDF
-        </button>
-
-        <button className="btn btn--primary" onClick={onResetView}>
-          Reset View
         </button>
       </div>
     </div>

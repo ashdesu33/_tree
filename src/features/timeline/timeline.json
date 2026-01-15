@@ -1,0 +1,127 @@
+[
+  {
+    "year": "Pre-1948",
+    "title": "",
+    "description": "The Hathaleen (Hathalin) family—part of the Jahalin Bedouin confederation—lived for generations around Tel Arad in the Naqab/Negev.",
+    "images": []
+  },
+  {
+    "year": 1948,
+    "title": "Nakba",
+    "description": "The family was forcibly expelled from Tel Arad/Naqab after the establishment of Israel; return became institutionally impossible as the area was reclassified under state/military control and later preserved as an \"archaeological site/national park,\" erasing modern Bedouin presence.",
+    "images": [
+      {
+        "src": "src/features/timeline/timeline/1948_map.png",
+        "alt": "Aerial view of Tel Arad/Naqab"
+      }
+    ]
+  },
+  {
+    "year": 1962,
+    "title": "Establishment of Arad",
+    "description": "Israel established the Jewish-majority \"development town\" Arad near Tel Arad, on lands from which Bedouin communities had been expelled; the area was later normalized as a tourism hub for the Dead Sea.",
+    "images": [
+      {
+        "src": "src/features/timeline/timeline/1962_1.jpg",
+        "alt": "Aerial view of an archaeological site near Arad"
+      },
+      {
+        "src": "src/features/timeline/timeline/1962_2.jpg",
+        "alt": "Another aerial view of a settlement in a desert environment"
+      }
+    ]
+  },
+  {
+    "year": "1948-1967",
+    "title": "Hathaleens Migration",
+    "description": "The Hathaleens migrated north seeking water and pasture, maintaining a pastoral life (tents, herding) and entering the Hebron hills (then under Jordanian rule), where informal grazing, dwelling-building, and land transactions were not prosecuted in the same way.",
+    "images": []
+  },
+  {
+    "year": 1967,
+    "title": "Hathaleens Migration",
+    "description": "Israel occupied the West Bank, taking over and restructuring Jordanian-era land and planning systems.",
+    "images": []
+  },
+  {
+    "year": 1971,
+    "title": "",
+    "description": "Military Order 418 centralized planning and permit authority under Israeli military/civil administration control, hollowing out Palestinian local planning bodies and making legal building permits in much of Area C nearly unattainable—laying the bureaucratic groundwork for “illegalization.”",
+    "images": [
+      {
+        "src": "src/features/timeline/timeline/1971_1.jpg",
+        "alt": "Description of 1971 image"
+      },
+      {
+        "src": "/src/features/timeline/timeline/1971_2.png",
+        "alt": "Description of 1971 image"
+      }
+    ]
+  },
+  {
+    "year": 1976,
+    "title": "",
+    "description": "After tightened control and restricted mobility, the Hathaleen family built the first dwelling in Umm al-Kheir, legitimized through local transactions, witnesses, and social relations.",
+    "images": []
+  },
+  {
+    "year": 1980,
+    "title": "",
+    "description": "Large parts of Masafer Yatta were designated Firing Zone 918 (a “live-fire training zone), renaming civilian land-use as “military use” and enabling restriction and expulsion. An Israeli Nahal military outpost was established near Umm al-Kheir and later transferred to settler institutions (via Amana, affiliated with Gush Emunim), gradually expanding into the civilian settlement Carmel, which came to sit immediately adjacent to the village.",
+    "images": []
+  },
+{
+    "year": 1987,
+    "title": "",
+    "description": "Dec 8. The First Intifada began and spread across Gaza and the West Bank; Israel responded with mass arrests, curfews, and closure—forming a wider template of militarized control that later deepened in Hebron and its rural peripheries.",
+    "images": []
+  },
+{
+    "year": 1993,
+    "title": "",
+    "description": "Sept 13. The Oslo Accords were signed; rather than “peace,” the post-Oslo period brought more checkpoints and movement control in the South Hebron Hills, re-coding everyday routes to markets and villages.",
+    "images": []
+  },
+{
+    "year": 1994,
+    "title": "",
+    "description": "Feb 25. Settler Baruch Goldstein killed 29 Palestinians in the Ibrahimi Mosque in Hebron; Israel intensified spatial control in the city (curfews, closures, internal checkpoints, market shutdowns), normalizing “security” governance patterns.",
+    "images": []
+  },
+{
+    "year": 1996,
+    "title": "",
+    "description": "Benjamin Netanyahu was elected Prime Minister; the politics of partial implementation and opposition to Oslo shaped new governance arrangements in Hebron.",
+    "images": []
+  },
+{
+    "year": 1997,
+    "title": "",
+    "description": "Jan 15. The Hebron Protocol split Hebron into sectors; H2 came under full Israeli military control with intensified checkpoints and “settler-only” corridors—becoming a model for rural “administrative expulsion” in the South Hebron Hills.",
+    "images": []
+  },
+{
+    "year": 2000,
+    "title": "",
+    "description": "Sept 28. The Second Intifada erupted after Ariel Sharon’s visit to the Al-Aqsa compound; the West Bank entered renewed militarization.",
+    "images": []
+  },
+{
+    "year": 2002,
+    "title": "",
+    "description": "During Operation Defensive Shield, Israel effectively re-occupied major West Bank cities; Oslo-era civil arrangements were sidelined. ",
+    "images": []
+  },
+{
+    "year": 2005,
+    "title": "",
+    "description": "Feb 8. A declared ceasefire formally ended the Second Intifada, but control shifted into finer-grained administrative enforcement (surveys, planning, demolitions, permit policing). ",
+    "images": []
+  },
+{
+    "year": 2005,
+    "title": "",
+    "description": "Feb 17. The Israeli Civil Administration and army executed the first formal demolition order in Umm al-Kheir, demolishing homes and livestock structures without alternative shelter; repeated demolitions became a recurring administrative practice.",
+    "images": []
+  }
+]

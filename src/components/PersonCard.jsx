@@ -1,128 +1,137 @@
+// src/components/CompactPersonCard.jsx
 import React from "react";
 
-function PersonCard({
+function CompactPersonCard({
   person,
   position,
   canvasBounds,
-  attachedSpouses,
   onPersonClick,
 }) {
   const genderNorm = (person.gender || "").toLowerCase();
   const isMale = genderNorm === "m" || genderNorm === "male";
   const isFemale = genderNorm === "f" || genderNorm === "female";
 
-  const fillColor = "#ffffff";
-  const strokeColor = "#341117";
-
-  const handleRootClick = (e) => {
+  const handleClick = (e) => {
     e.stopPropagation();
     onPersonClick(person);
-  };
-
-  const handleSpouseClick = (spouse, e) => {
-    e.stopPropagation();
-    onPersonClick(spouse);
   };
 
   const handleStop = (e) => {
     e.stopPropagation();
   };
 
+  // Calculate card dimensions based on name length
+  const nameLength = person.name.length;
+  const estimatedWidth = Math.max(80, Math.min(nameLength * 8 + 20, 180));
+  
+  // Use position width if available (from layout), otherwise estimate
+  const cardWidth = position.width || estimatedWidth;
+  const cardHeight = position.height || 50;
+
+  // Shape size and position
+  const shapeSize = 12;
+  const shapeY = 8;
+
+  // Connection point is at center
+  const connectionX = cardWidth / 2;
+
   return (
     <div
-      className="person-card"
+      className="compact-person-card"
       style={{
+        position: "absolute",
         left: `${position.x - canvasBounds.minX}px`,
         top: `${position.y - canvasBounds.minY}px`,
+        width: `${cardWidth}px`,
+        cursor: "pointer",
+        textAlign: "center",
       }}
-      onClick={handleRootClick}
+      onClick={handleClick}
       onMouseDown={handleStop}
       onTouchStart={handleStop}
     >
-      <div className="person-card-shape-wrapper">
-        <svg
-          className="person-card-shape-svg"
-          width={250}
-          height={120}
-          viewBox="0 0 250 120"
-        >
+      {/* Gender indicator shape */}
+      <div style={{ 
+        display: "flex", 
+        justifyContent: "center", 
+        alignItems: "center",
+        height: shapeY + shapeSize + 4,
+        position: "relative",
+      }}>
+        {/* Visual connection point indicator (invisible, for debugging) */}
+        <div style={{
+          position: "absolute",
+          left: `${connectionX}px`,
+          top: 0,
+          width: "2px",
+          height: "2px",
+          transform: "translate(-1px, 0)",
+          pointerEvents: "none",
+        }} />
+        
+        <svg width={shapeSize * 2} height={shapeSize * 2} style={{ display: "block" }}>
           {isMale && (
             <polygon
-              points="125,4 250,116 0,116"
-              fill={fillColor}
-              stroke={strokeColor}
-              strokeWidth="3"
+              points={`${shapeSize},2 ${shapeSize * 2 - 2},${shapeSize * 2 - 2} 2,${shapeSize * 2 - 2}`}
+              fill="#341117"
+              stroke="#341117"
+              strokeWidth="1"
             />
           )}
-
           {isFemale && (
-            <ellipse
-              cx="125"
-              cy="60"
-              rx="120"
-              ry="60"
-              fill={strokeColor}
-              stroke={strokeColor}
-              strokeWidth="2"
+            <circle
+              cx={shapeSize}
+              cy={shapeSize}
+              r={shapeSize - 2}
+              fill="#341117"
+              stroke="#341117"
+              strokeWidth="1"
             />
           )}
-
           {!isMale && !isFemale && (
             <rect
-              x="8"
-              y="8"
-              width="164"
-              height="104"
-              rx="14"
-              ry="14"
-              fill={fillColor}
-              stroke={strokeColor}
-              strokeWidth="2"
+              x="2"
+              y="2"
+              width={shapeSize * 2 - 4}
+              height={shapeSize * 2 - 4}
+              rx="2"
+              fill="#341117"
+              stroke="#341117"
+              strokeWidth="1"
             />
           )}
         </svg>
-
-        <div className="person-card-content">
-        
-          <div className="person-name">{person.name}</div>
-
-          {person.title && (
-            <div className="person-title">{person.title}</div>
-          )}
-
-          {(person.birthDate || person.deathDate) && (
-            <div className="person-dates">
-              {person.birthDate ? `b. ${person.birthDate}` : ""}
-              {person.birthDate && person.deathDate ? " · " : ""}
-              {person.deathDate ? `d. ${person.deathDate}` : ""}
-            </div>
-          )}
-                {attachedSpouses.length > 0 && (
-        <div className="person-spouses">
-          {attachedSpouses.map((sp) => (
-            <div key={sp.id} className="person-spouse-row">
-              <span className="person-spouse-label">sp.</span>
-              <button
-                type="button"
-                className="person-spouse-button"
-                onClick={(e) => handleSpouseClick(sp, e)}
-              >
-                {sp.name}
-              </button>
-              {sp.birthDate && (
-                <span className="person-spouse-birth">
-                  b. {sp.birthDate}
-                </span>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-        </div>
       </div>
 
+      {/* Name - main focus */}
+      <div
+        style={{
+          fontSize: "13px",
+          fontWeight: 600,
+          color: "#341117",
+          lineHeight: "1.2",
+          wordBreak: "break-word",
+          padding: "0 4px",
+          marginTop: "2px",
+        }}
+      >
+        {person.name}
+      </div>
+
+      {/* Birth year if available */}
+      {person.birthDate && (
+        <div
+          style={{
+            fontSize: "9px",
+            color: "#6b7280",
+            marginTop: "1px",
+          }}
+        >
+          {person.birthDate.match(/\d{4}/) ? person.birthDate.match(/\d{4}/)[0] : person.birthDate}
+        </div>
+      )}
     </div>
   );
 }
 
-export default PersonCard;
+export default CompactPersonCard;

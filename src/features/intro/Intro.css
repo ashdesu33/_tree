@@ -1,0 +1,22 @@
+.introContainer{
+    padding: 5% 10%;
+    background-color: #471a22 ;
+    color:white;
+    font-family: "authentic";
+}
+
+.intro-title{
+    font-weight: 500;
+}
+
+.description{
+    padding-left: 40%;
+}
+
+
+@media (max-width: 767px) {
+
+    .description{
+    padding-left: 5%;
+}
+}
