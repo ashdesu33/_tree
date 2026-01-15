@@ -11,7 +11,7 @@
     "description": "The family was forcibly expelled from Tel Arad/Naqab after the establishment of Israel; return became institutionally impossible as the area was reclassified under state/military control and later preserved as an \"archaeological site/national park,\" erasing modern Bedouin presence.",
     "images": [
       {
-        "src": "src/features/timeline/timeline/1948_map.png",
+        "src": "/timeline/1948_map.png",
         "alt": "Aerial view of Tel Arad/Naqab"
       }
     ]
@@ -22,11 +22,11 @@
     "description": "Israel established the Jewish-majority \"development town\" Arad near Tel Arad, on lands from which Bedouin communities had been expelled; the area was later normalized as a tourism hub for the Dead Sea.",
     "images": [
       {
-        "src": "src/features/timeline/timeline/1962_1.jpg",
+        "src": "/timeline/1962_1.jpg",
         "alt": "Aerial view of an archaeological site near Arad"
       },
       {
-        "src": "src/features/timeline/timeline/1962_2.jpg",
+        "src": "/timeline/1962_2.jpg",
         "alt": "Another aerial view of a settlement in a desert environment"
       }
     ]
@@ -49,11 +49,11 @@
     "description": "Military Order 418 centralized planning and permit authority under Israeli military/civil administration control, hollowing out Palestinian local planning bodies and making legal building permits in much of Area C nearly unattainable—laying the bureaucratic groundwork for “illegalization.”",
     "images": [
       {
-        "src": "src/features/timeline/timeline/1971_1.jpg",
+        "src": "/timeline/timeline/1971_1.jpg",
         "alt": "Description of 1971 image"
       },
       {
-        "src": "/src/features/timeline/timeline/1971_2.png",
+        "src": "/timeline/timeline/1971_2.png",
         "alt": "Description of 1971 image"
       }
     ]
